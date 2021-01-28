@@ -1,0 +1,19 @@
+{
+  "name": "api-host-rbmq-client",
+  "version": "1.7.4",
+  "description": "Utility to send messages with authorization header to a server running api-host-rbmq.",
+  "main": "main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stokes91/api-host-rbmq-client.git"
+  },
+  "author": "Alexander Stokes <stokes91@gmail.com>",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/stokes91/api-host-rbmq-client/issues"
+  },
+  "homepage": "https://github.com/stokes91/api-host-rbmq-client#readme"
+}

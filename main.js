@@ -202,7 +202,7 @@ Client.createClient = (options, callback) => {
 
     return that;
   }
-  else if (!options.redisClient || !options.expire || !options.userId) {
+  else if (!options.redisClient) {
     return;
   }
 

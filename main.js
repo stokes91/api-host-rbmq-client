@@ -14,9 +14,9 @@
    limitations under the License.
 */
 
-const crypto = require('crypto');
-const util = require('util');
-const https = require('https');
+const crypto = require("crypto");
+const util = require("util");
+const https = require("https");
 
 const TokenRegex = /^[WXYZBCDEFGHJKLMN][WXYZBCDEFGHJKLMNO123456789PQRTUV]{7}$/;
 const TimestampRegex = /^[\d]{4}\-[\d]{2}\-[\d]{2}T[\d]{2}\:[\d]{2}$/;
@@ -28,60 +28,42 @@ class Client {
   }
 
   pingOptions(callback) {
-    if (this.verbose) {
-      console.log((new Date).toISOString(), 'pingOptions');
-    }
-
-    const req = https.request({
-      method: 'OPTIONS',
-      host: this.host,
-      agent: this.agent,
-      path: '/',
-      headers: {
-        authorization: this.authorization,
-        accept: 'application/json'
+    const req = https.request(
+      {
+        method: "OPTIONS",
+        host: this.host,
+        agent: this.agent,
+        path: "/",
+        headers: {
+          authorization: this.authorization,
+          accept: "application/json",
+        },
+      },
+      (res) => {
+        callback();
       }
-    }, (res) => {
-      console.log(res);
-      callback();
-    });
+    );
 
-    req.end(Buffer.from(''));
+    req.end(Buffer.from(""));
   }
 
   apiCall(channel, data, callback) {
-    if (this.verbose) {
-      console.log((new Date).toISOString(), 'apiCall', { channel, data });
-    }
-
     const result = {};
-    const path = channel + '?' + crypto.randomBytes(16).toString('hex');
+    const path = channel + "?" + crypto.randomBytes(16).toString("hex");
 
     this.postResource(path, data, (err) => {
       if (err) {
-        if (this.verbose) {
-          console.log((new Date).toISOString(), util.inspect(err));
-        }
-
         callback(err);
         return;
       }
 
       const resource = this.getResource(path, (err) => {
         if (err) {
-          if (this.verbose) {
-            console.log((new Date).toISOString(), util.inspect(err));
-          }
-
           callback(err);
           return;
         }
 
         Object.assign(result, resource);
-
-        if (this.verbose) {
-          console.log((new Date).toISOString(), 'callbackResult', { result });
-        }
 
         callback();
       });
@@ -91,152 +73,133 @@ class Client {
   }
 
   getResource(path, callback) {
-    if (this.verbose) {
-      console.log((new Date).toISOString(), 'getResource', { path });
-    }
-
     const resource = {};
 
-    const req = https.request({
-      method: 'GET',
-      host: this.host,
-      agent: this.agent,
-      path,
-      headers: {
-        authorization: this.authorization,
-        accept: 'application/json'
-      }
-    }, (res) => {
-      if (res.statusCode !== 200 ||
-        res.headers['content-type'] !== 'application/json' ||
-        !res.headers['content-length']) {
-
-        if (this.verbose) {
-          console.log((new Date).toISOString(), 'getResource error', { statusCode: res.statusCode, headers: res.headers });
-        }
-
-        callback(true);
-        return;
-      }
-
-      const b = [];
-      res.on('data', (d) => { b.push(d); });
-      res.on('end', () => {
-        try {
-          Object.assign(resource, JSON.parse(Buffer.concat(b).toString('utf8')));
-        }
-        catch (err) {
-          if (this.verbose) {
-            console.log((new Date).toISOString(), 'getResource parseError', util.inspect(err));
-          }
-          callback(err);
+    const req = https.request(
+      {
+        method: "GET",
+        host: this.host,
+        agent: this.agent,
+        path,
+        headers: {
+          authorization: this.authorization,
+          accept: "application/json",
+        },
+      },
+      (res) => {
+        if (
+          res.statusCode !== 200 ||
+          res.headers["content-type"] !== "application/json" ||
+          !res.headers["content-length"]
+        ) {
+          callback(true);
           return;
         }
 
-        callback();
-      });
-    });
+        const b = [];
+        res.on("data", (d) => {
+          b.push(d);
+        });
+        res.on("end", () => {
+          try {
+            Object.assign(
+              resource,
+              JSON.parse(Buffer.concat(b).toString("utf8"))
+            );
+          } catch (err) {
+            callback(err);
+            return;
+          }
 
-    req.end(Buffer.from(''));
+          callback();
+        });
+      }
+    );
+
+    req.end(Buffer.from(""));
 
     return resource;
   }
 
   postResource(path, object, callback) {
-    if (this.verbose) {
-      console.log((new Date).toISOString(), 'postResource', { host: this.host, path, object });
-    }
-
-    const req = https.request({
-      method: 'POST',
-      host: this.host,
-      agent: this.agent,
-      path,
-      headers: {
-        authorization: this.authorization,
-        'content-type': 'application/json'
-      }
-    }, (res) => {
-      if (res.statusCode !== 202) {
-        callback(null); // Accepted (given when the resource times out after 5 minutes)
-        return;
-      }
-      else if (res.statusCode !== 302 ||
-        res.headers.location !== path ||
-        res.headers['content-type'] ||
-        res.headers['content-length']) {
-
-        if (this.verbose) {
-          console.log((new Date).toISOString(), 'postResource error', { statusCode: res.statusCode, headers: res.headers });
+    const req = https.request(
+      {
+        method: "POST",
+        host: this.host,
+        agent: this.agent,
+        path,
+        headers: {
+          authorization: this.authorization,
+          "content-type": "application/json",
+        },
+      },
+      (res) => {
+        if (res.statusCode !== 202) {
+          callback(null); // Accepted (given when the resource times out after 5 minutes)
+          return;
+        } else if (
+          res.statusCode !== 302 ||
+          res.headers.location !== path ||
+          res.headers["content-type"] ||
+          res.headers["content-length"]
+        ) {
+          callback(true);
+          return;
         }
 
-        callback(true);
-        return;
+        callback();
       }
+    );
 
-      callback();
-    });
-
-    req.end(Buffer.from(JSON.stringify(object), 'utf8'));
+    req.end(Buffer.from(JSON.stringify(object), "utf8"));
   }
 }
 
 Client.createClient = (options, callback) => {
   if (!options.host) {
     return;
-  }
-  else if (options.authorization) {
-    const {
-      authorization,
-      host,
-      verbose
-    } = options.authorization;
+  } else if (options.authorization) {
+    const { authorization, host, verbose } = options.authorization;
 
     const that = new Client({
       authorization,
       host,
-      verbose
+      verbose,
     });
 
     process.nextTick(callback);
 
     return that;
-  }
-  else if (!options.redisClient) {
+  } else if (!options.redisClient) {
     return;
   }
 
-  const {
-    host,
-    redisClient,
-    verbose
-  } = options;
+  const { host, redisClient, verbose } = options;
 
   const that = new Client({ host, verbose });
 
-  redisClient.get('AUTH_TOK', (err, givenToken) => {
+  redisClient.get("AUTH_TOK", (err, givenToken) => {
     if (err) {
       callback(err);
       return;
-    }
-    else if (
+    } else if (
       givenToken.length !== 99 ||
-      givenToken[8] !== '-' ||
-      givenToken[25] !== ':' ||
-      givenToken[34] !== '-' ||
+      givenToken[8] !== "-" ||
+      givenToken[25] !== ":" ||
+      givenToken[34] !== "-" ||
       !TokenRegex.test(givenToken.substring(0, 8)) ||
       !TimestampRegex.test(givenToken.substring(9, 25)) ||
       !TokenRegex.test(givenToken.substring(26, 34)) ||
-      !DigestRegex.test(givenToken.substring(35, 99))) {
-      callback('invalidToken');
+      !DigestRegex.test(givenToken.substring(35, 99))
+    ) {
+      callback("invalidToken");
       return;
-    }
-    else if (givenToken.substring(9, 25) < (new Date).toISOString()) {
-      callback('expiredToken');
+    } else if (givenToken.substring(9, 25) < new Date().toISOString()) {
+      callback("expiredToken");
       return;
     }
 
-    that.authorization = 'Basic ' + Buffer.from(givenToken).toString('base64');
+    that.authorization = "Basic " + Buffer.from(givenToken).toString("base64");
 
     callback();
   });

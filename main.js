@@ -15,8 +15,8 @@
 */
 
 const crypto = require("crypto");
-const util = require("util");
 const https = require("https");
+const zlib = require("zlib");
 
 const TokenRegex = /^[WXYZBCDEFGHJKLMN][WXYZBCDEFGHJKLMNO123456789PQRTUV]{7}$/;
 const TimestampRegex = /^[\d]{4}\-[\d]{2}\-[\d]{2}T[\d]{2}\:[\d]{2}$/;
@@ -35,7 +35,7 @@ class Client {
         agent: this.agent,
         path: "/",
         headers: {
-          authorization: this.authorization,
+          cookie: "_x=" + this.token,
           accept: "application/json",
         },
       },
@@ -73,7 +73,26 @@ class Client {
   }
 
   getResource(path, callback) {
-    const resource = {};
+    const response = {};
+
+    let calledBack = false;
+    const callbackOnce = function () {
+      if (calledBack) return;
+      calledBack = true;
+      callback.apply(this, arguments);
+    };
+
+    console.log({
+      method: "GET",
+      host: this.host,
+      agent: this.agent,
+      path,
+      headers: {
+        cookie: "_x=" + this.token,
+        accept: "application/json",
+        "accept-encoding": "br",
+      },
+    });
 
     const req = https.request(
       {
@@ -82,8 +101,9 @@ class Client {
         agent: this.agent,
         path,
         headers: {
-          authorization: this.authorization,
+          cookie: "_x=" + this.token,
           accept: "application/json",
+          "accept-encoding": "br",
         },
       },
       (res) => {
@@ -97,31 +117,74 @@ class Client {
         }
 
         const b = [];
-        res.on("data", (d) => {
-          b.push(d);
-        });
-        res.on("end", () => {
+
+        const continues = () => {
+          const ser = Buffer.concat(b).toString("utf8");
+
           try {
-            Object.assign(
-              resource,
-              JSON.parse(Buffer.concat(b).toString("utf8"))
-            );
-          } catch (err) {
-            callback(err);
+            Object.assign(response, JSON.parse(ser));
+          } catch (e) {
+            if (this.verbose) {
+              console.log(e, ser);
+            }
+            callbackOnce(e);
             return;
           }
 
-          callback();
-        });
+          callbackOnce(null, response);
+          return;
+        };
+
+        let decompressionAlg;
+
+        if (res.headers["content-encoding"] === "br") {
+          decompressionAlg = zlib.createBrotliDecompress();
+        } else {
+          res
+            .on("data", (d) => {
+              b.push(d);
+            })
+            .on("end", () => {
+              continues();
+            })
+            .on("error", (e) => {
+              callbackOnce(e);
+            });
+          return;
+        }
+
+        res.pipe(decompressionAlg);
+
+        decompressionAlg
+          .on("data", (d) => {
+            b.push(d);
+          })
+          .on("end", () => {
+            continues();
+          })
+          .on("error", (e) => {
+            callbackOnce(e);
+          });
       }
     );
 
     req.end(Buffer.from(""));
 
-    return resource;
+    return response;
   }
 
   postResource(path, object, callback) {
+    console.log({
+      method: "POST",
+      host: this.host,
+      agent: this.agent,
+      path,
+      headers: {
+        cookie: "_x=" + this.token,
+        "content-type": "application/json",
+      },
+    });
+
     const req = https.request(
       {
         method: "POST",
@@ -129,11 +192,12 @@ class Client {
         agent: this.agent,
         path,
         headers: {
-          authorization: this.authorization,
+          cookie: "_x=" + this.token,
           "content-type": "application/json",
         },
       },
       (res) => {
+        console.log({ statusCode: res.statusCode, headers: res.headers });
         if (res.statusCode !== 202) {
           callback(null); // Accepted (given when the resource times out after 5 minutes)
           return;
@@ -194,12 +258,9 @@ Client.createClient = (options, callback) => {
     ) {
       callback("invalidToken");
       return;
-    } else if (givenToken.substring(9, 25) < new Date().toISOString()) {
-      callback("expiredToken");
-      return;
     }
 
-    that.authorization = "Basic " + Buffer.from(givenToken).toString("base64");
+    that.token = givenToken;
 
     callback();
   });
